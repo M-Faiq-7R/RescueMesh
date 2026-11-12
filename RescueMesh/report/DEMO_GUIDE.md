@@ -1,76 +1,64 @@
-# RescueMesh Demonstration Guide
+# RescueMesh — Demonstration Guide
 
-This guide provides reproducible step-by-step commands to demonstrate each capability of the upgraded RescueMesh framework.
+This guide provides a short, reproducible sequence for presenting the project. Run commands from the application directory:
 
----
-
-## Prerequisites
-Ensure the virtual environment is active:
 ```bash
+cd RescueMesh
 source .venv/bin/activate
 ```
 
----
+## 1. Verify the codebase
 
-## 1. Automated Verification & Test Suite
-Run the 23 automated tests covering schema validation, edge checks, synthetic generation, classical solvers, QUBO math, and quantum memory bounds:
 ```bash
-python -m unittest discover -s tests -p "test_*.py" -v
+python -m unittest discover -s tests -v
 ```
-*Expected*: All 23 tests pass with `OK` in under 1 second.
 
----
+The latest recorded local verification was 25 passing tests. Re-run this command on the presentation machine rather than relying solely on the recorded result.
 
-## 2. Realistic 8-Node Disaster Response Scenario (Unavoidable Interference)
-Execute the 8-node tactical mesh scenario where spectrum is limited to 3 channels and high-density core clashes make interference mathematically unavoidable ($E^* > 0$):
+## 2. Show the 8-node emergency mesh
+
 ```bash
 python main.py --scenario scenarios/realistic_8node.json --no-qaoa
 ```
-*Key outputs to highlight*:
-* Exhaustive search evaluates all $3^8 = 6,561$ configurations in ~73 ms.
-* Proves the non-zero global minimum: **15.84**.
-* Priority-degree Greedy allocates channels in ~0.15 ms with an optimality gap of 13.6%.
-* Simulated Annealing reaches the exact global optimum (15.84) in ~35 ms.
-* Network visualization saved to `results/allocated_network.png` showing node channel colors and active clashes highlighted in bold crimson.
 
----
+Talking points:
+- 8 nodes, 3 channels, and 15 synthetic interference links.
+- The recorded exact search evaluated (3^8 = 6,561) valid assignments and found a minimum interference score of 15.84.
+- QAOA is intentionally skipped: this scenario requires 24 qubits, above the default 18-qubit statevector guard.
+- The output includes a channel allocation plot with same-channel clashes highlighted.
 
-## 3. Quantum QAOA on Unavoidable Interference Scenario (15 Qubits)
-Run QAOA ($p=1$) on a 5-node scenario containing a 4-clique with 3 channels (unavoidable optimum = 2.40):
+## 3. Show QAOA on the 5-node unavoidable-interference case
+
 ```bash
-python main.py --scenario scenarios/unavoidable_5node.json --p 1 --shots 2048
-```
-*Key outputs to highlight*:
-* Feasibility check verifies 15 qubits requires only 0.5 MB statevector RAM.
-* QAOA increases valid allocation frequency from 0.68% (random) to ~18%.
-* QAOA successfully samples the non-zero optimal allocation (2.40).
-* Independent verification confirms energy and counts from raw bitstrings.
-
----
-
-## 4. Reproduce the Original Baseline Benchmark (Original 5-Node Instance)
-Run the complete original benchmark with QAOA $p=1$ and $p=2$ on the 3-colorable 5-node graph:
-```bash
-python main.py
-```
-*Key outputs to highlight*:
-* Full backwards compatibility: produces `results/phase5_results.json`, `fig1`–`fig5`, `results/qaoa_results.json`, and `report/architecture_diagram.png`.
-* All QUBO and exhaustive search validation checks pass.
-
----
-
-## 5. Generate and Test an Arbitrary Synthetic Scenario
-Generate a 10-node 3-channel mesh topology with guaranteed unavoidable interference, and evaluate it:
-```bash
-python scenario_generator.py --nodes 10 --channels 3 --density 0.40 --seed 99 --out scenarios/test_10node.json
-python main.py --scenario scenarios/test_10node.json --no-qaoa
+python main.py --scenario scenarios/unavoidable_5node.json --p 2 --shots 4096
 ```
 
----
+Talking points:
+- The graph contains a four-node clique but only three channels, so at least one conflict is unavoidable.
+- The exact classical optimum is 2.40, with six optimal assignments.
+- QAOA p=1 and p=2 are sampled and compared with random bitstring sampling.
+- The recorded run observed 18.14% / 48.46% valid samples and 0.37% / 1.64% optimal samples for p=1 / p=2, respectively.
+- Classical solvers reach the exact optimum in milliseconds on this small problem; do not present QAOA as faster.
 
-## 6. Inspect Results and Visualizations
-Check the generated artifacts in `results/`:
-* `results/network_graph.png`: Topology with edge weights.
-* `results/allocated_network.png`: Topology with nodes colored by channel and clash links highlighted in bold red.
-* `results/experiment_results.json`: Complete structured JSON output.
-* `results/comparison_table.csv`: CSV comparison table.
+## 4. Generate a new synthetic scenario
+
+```bash
+python main.py --generate-scenario --nodes 8 --channels 3 --density 0.45 --seed 42 --no-qaoa
+```
+
+This generates a synthetic topology and evaluates it with the classical methods. Change the seed to generate a different reproducible instance.
+
+## 5. Inspect artifacts
+
+Look in `results/` (or the selected `--outdir`) for:
+- `network_graph.png`
+- `allocated_network.png`
+- `experiment_results.json`
+- `comparison_table.csv`
+
+## Judge-facing caveats
+
+- Edge weights are synthetic heuristics, not measured RF/SINR values.
+- QAOA uses Qiskit Aer on a classical computer; no QPU was used.
+- A better sample percentage in one run is not proof of a general advantage.
+- Statevector memory grows exponentially with qubit count.

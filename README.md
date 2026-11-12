@@ -1,253 +1,98 @@
 # RescueMesh
-**Quantum-Assisted Channel Allocation for Emergency Wireless Mesh Networks**
 
-A Qiskit Fall Fest 2026 hackathon project exploring QUBO, Ising Hamiltonians, and QAOA for allocating wireless channels in post-disaster emergency mesh networks.
+**Quantum-assisted channel allocation for emergency wireless mesh networks**
 
-## Overview
+A Qiskit Fall Fest 2026 project exploring how limited wireless channels can be assigned across emergency mesh nodes using QUBO, Ising Hamiltonians, and QAOA—benchmarked against classical optimization.
 
-After a disaster, cellular infrastructure may become unavailable. Emergency teams can deploy portable wireless mesh nodes for command, medical, rescue, and shelter operations.
+> **Scope:** RescueMesh is a software simulation. It uses synthetic interference weights, not measured RF/SINR data or deployed radio hardware. QAOA runs on the classical Qiskit Aer simulator. **No quantum advantage or speedup is claimed.**
 
-When nearby nodes share wireless channels, interference can occur. RescueMesh models this problem as a mathematical optimization task and compares quantum-inspired optimization with classical algorithms.
+## Start here
 
-The project uses:
-- QUBO for mathematical formulation.
-- Ising Hamiltonians for quantum encoding.
-- QAOA for approximate optimization.
-- Qiskit Aer for local quantum circuit simulation.
-- Exhaustive Search, Greedy Allocation, and Simulated Annealing for classical comparisons.
+- **[Project overview and technical documentation](RescueMesh/README.md)** — formulation, architecture, experiments, setup, and limitations.
+- **[Demonstration guide](RescueMesh/report/DEMO_GUIDE.md)** — commands and suggested live-demo sequence.
+- **[Presentation script and technical Q&A](RescueMesh/report/video_script.md)** — concise walkthrough and anticipated judge questions.
+- **[Technical report](RescueMesh/report/RescueMesh_Report.docx)**
+- **[Architecture diagram](RescueMesh/report/architecture_diagram.png)**
+- **[Scenario definitions](RescueMesh/scenarios/)** — original, unavoidable-interference, realistic 8-node, and dense 12-node cases.
+- **[Experiment outputs](RescueMesh/results/)** — plots, CSV comparison, and JSON artifacts.
 
-**Scientific integrity:** This is a simulation using synthetic interference weights, not a real wireless deployment. No quantum advantage or speedup is claimed.
+## What it does
 
-## Mathematical Formulation
+1. Models emergency communication nodes as a weighted interference graph.
+2. Builds a QUBO that minimizes same-channel interference while enforcing exactly one channel per node.
+3. Converts the QUBO into an Ising Hamiltonian.
+4. Runs classical baselines: exhaustive search (when tractable), greedy allocation, and simulated annealing.
+5. Runs QAOA with Qiskit Aer when the statevector safety limit allows it.
+6. Independently checks QUBO/Ising consistency and evaluates sampled bitstrings.
 
-Let:
-- \(x_{i,c}\in\{0,1\}\): whether node \(i\) uses channel \(c\).
-- \(w_{ij}\): interference weight between connected nodes.
-- \(P\): penalty for violating channel-assignment constraints.
+## Selected experiment: unavoidable-interference case
 
-The QUBO objective is:
-
-\[
-\boxed{
-E(x)=
-\sum_{(i,j)\in E}w_{ij}\sum_{c=1}^{K}x_{i,c}x_{j,c}
-+
-P\sum_{i=1}^{N}
-\left(\sum_{c=1}^{K}x_{i,c}-1\right)^2
-}
-\]
-
-The first term minimizes interference. The second ensures that every node receives exactly one channel.
-
-The binary variables are converted into Ising variables using:
-
-\[
-x_i=\frac{1-Z_i}{2}
-\]
-
-This produces a cost Hamiltonian used by QAOA.
-
-## QAOA Implementation
-
-RescueMesh implements the Quantum Approximate Optimization Algorithm using Qiskit Aer.
-
-The circuit alternates between:
-
-1. Initial equal superposition using Hadamard gates.
-2. Cost Hamiltonian rotations using RZ and RZZ gates.
-3. Mixer Hamiltonian rotations using RX gates.
-4. Measurement and classical decoding.
-5. Classical parameter optimization using COBYLA.
-
-Experiments use QAOA depths \(p=1\) and \(p=2\).
-
-The quantum circuits are simulated locally using a classical computer. No quantum hardware is required.
-
-## Experimental Results
-
-### Unavoidable-Interference Scenario
-
-The five-node scenario contains a four-node clique (K4) with only three available channels. Therefore, at least one interference conflict is unavoidable.
-
-- Nodes: 5
-- Channels: 3
-- Edges: 8
-- Qubits: 15
-- Shots: 4,096
-- Exact global optimum: 2.4
-- Number of optimal assignments: 6
-
-### QAOA Results
+The 5-node, 3-channel benchmark contains a four-node clique, so at least one same-channel conflict is unavoidable. In the recorded 4,096-shot runs:
 
 | Metric | QAOA p=1 | QAOA p=2 |
 |---|---:|---:|
-| Valid solutions | 18.14% | 48.46% |
-| Optimal solutions | 0.37% | 1.64% |
-| Mean QUBO energy | 51.84 | 40.42 |
+| Valid sampled allocations | 18.14% | 48.46% |
+| Optimal sampled allocations | 0.37% | 1.64% |
+| Mean sampled QUBO energy | 51.84 | 40.42 |
 | Optimization time | 53.4 s | 17.3 s |
-| Best valid interference | 2.4 | 2.4 |
+| Best valid interference | 2.40 | 2.40 |
 
-Increasing the QAOA depth from p=1 to p=2 improved the valid-solution and optimal-solution sampling rates in this experiment.
+The exact classical optimum is **2.40**, with six optimal assignments. On this small instance, exhaustive search, greedy allocation, and simulated annealing also find the optimum in milliseconds. The QAOA figures are individual experimental runs, not statistical evidence of general improvement; p=2's shorter measured optimization time reflects its optimizer evaluation path in this run, not a general rule that deeper circuits run faster.
 
-### Classical Comparison
+## Quick start
 
-| Algorithm | Best Interference | Runtime |
-|---|---:|---:|
-| Exhaustive Search | 2.4 | 1.9 ms |
-| Greedy Allocation | 2.4 | 0.14 ms |
-| Simulated Annealing | 2.4 | 25.99 ms |
-| QAOA p=1 | 2.4 | 53.4 s optimization |
-| QAOA p=2 | 2.4 | 17.3 s optimization |
-
-These results demonstrate that QAOA can find optimal candidate solutions in this small simulated instance. Classical algorithms remain substantially faster.
-
-Results are from individual experimental runs and should not be interpreted as statistical proof of consistent QAOA improvement.
-
-## Installation
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/M-Faiq-7R/RescueMesh.git
-```
-
-### 2. Enter the project directory
+From the repository root:
 
 ```bash
 cd RescueMesh
-```
-
-### 3. Create a virtual environment
-
-```bash
 python3 -m venv .venv
-```
-
-### 4. Activate it
-
-Linux / macOS:
-
-```bash
 source .venv/bin/activate
-```
-
-Windows:
-
-```powershell
-.venv\Scripts\activate
-```
-
-### 5. Install dependencies
-
-```bash
-pip install --upgrade pip
 pip install -r requirements.txt
+python -m unittest discover -s tests -v
 ```
 
-### 6. Verify installation
-
-```bash
-python -c "import qiskit, qiskit_aer, networkx; print('Qiskit:', qiskit.__version__); print('Aer:', qiskit_aer.__version__); print('NetworkX:', networkx.__version__)"
-```
-
-Tested locally with:
-- Python 3.12
-- Qiskit 2.6.2
-- Qiskit Aer 0.18.2
-- NetworkX 3.7
-
-## Running RescueMesh
-
-### Run the default experiment
-
-```bash
-python main.py
-```
-
-### Run the unavoidable-interference scenario
-
-```bash
-python main.py --scenario scenarios/unavoidable_5node.json --p 1 --shots 4096
-```
-
-### Run QAOA with p=2
+Run the QAOA comparison on the unavoidable-interference scenario:
 
 ```bash
 python main.py --scenario scenarios/unavoidable_5node.json --p 2 --shots 4096
 ```
 
-### Run the larger eight-node scenario
+Run the larger 8-node case with classical solvers only:
 
 ```bash
 python main.py --scenario scenarios/realistic_8node.json --no-qaoa
 ```
 
-### Run the interactive demonstration
+See the [full README](RescueMesh/README.md) for installation details, commands, math, and the project map.
 
-```bash
-python demo.py
-```
-
-Generated visualizations and experiment outputs are saved under `results/`.
-
-## Running Tests
-
-Execute the automated test suite:
-
-```bash
-python -m unittest discover -s tests -v
-```
-
-The current local test suite contains 25 tests, covering:
-- Classical optimization algorithms.
-- QUBO matrix construction.
-- QUBO-to-Ising conversion.
-- Quantum solver helper functions.
-- Scenario validation.
-- Visualization.
-- Statevector memory calculations.
-
-**Latest local verification:** 25 tests passed.
-
-## Project Structure
+## Repository map
 
 ```text
-RescueMesh/
-├── main.py
-├── demo.py
-├── simulation.py
-├── scenario.py
-├── scenario_generator.py
-├── qubo_model.py
-├── quantum_solver.py
-├── classical_solver.py
-├── evaluation.py
-├── visualization.py
-├── config.py
-├── requirements.txt
-├── scenarios/
-├── tests/
-├── results/
-└── report/
+.
+├── README.md                    # This landing page
+├── LICENSE
+└── RescueMesh/                  # Python application root
+    ├── main.py                  # CLI entry point
+    ├── simulation.py            # End-to-end experiment pipeline
+    ├── scenario.py              # Scenario model and validation
+    ├── scenario_generator.py    # Synthetic topology generator
+    ├── classical_solver.py      # Exact, greedy, simulated annealing
+    ├── qubo_model.py            # QUBO and Ising formulation
+    ├── quantum_solver.py        # QAOA / Qiskit Aer
+    ├── evaluation.py            # Independent validation and metrics
+    ├── visualization.py         # Network and result plots
+    ├── scenarios/               # JSON benchmark inputs
+    ├── tests/                   # Automated tests
+    ├── results/                 # Generated and recorded outputs
+    └── report/                  # Report and demo materials
 ```
 
-## Limitations
+## Reproducibility and scientific limitations
 
-- Synthetic interference weights rather than measured RF data.
-- Small problem instances.
-- QAOA executed on a classical statevector simulator.
-- Noisy quantum hardware was not tested.
-- Classical solvers outperform QAOA in runtime on tested instances.
-- Results are individual runs, not a large-scale statistical evaluation.
-- No quantum advantage or speedup is demonstrated.
+- The supplied scenarios and link weights are synthetic modeling inputs.
+- QAOA is executed using a classical statevector simulator; no QPU run is reported.
+- Statevector memory grows exponentially with qubit count. The CLI uses an 18-qubit safety limit by default; larger cases should use classical solvers unless the user deliberately overrides the guard.
+- The classical baselines are expected to outperform statevector QAOA on these small instances.
+- Runtime and sampling percentages depend on the machine, optimizer path, seed, and shot budget. Treat reported values as recorded runs, not universal performance guarantees.
 
-## References
-
-1. Farhi, E., Goldstone, J., and Gutmann, S. *A Quantum Approximate Optimization Algorithm* (2014). https://arxiv.org/abs/1411.4028
-2. Lucas, A. *Ising Formulations of Many NP Problems* (2014). https://doi.org/10.3389/fphy.2014.00005
-3. Javadi-Abhari et al. *Quantum Computing with Qiskit* (2024). https://arxiv.org/abs/2405.08810
-4. Qiskit Aer: https://github.com/Qiskit/qiskit-aer
-
----
-
-**Developed for Qiskit Fall Fest 2026.**
+Developed for **Qiskit Fall Fest 2026**.
