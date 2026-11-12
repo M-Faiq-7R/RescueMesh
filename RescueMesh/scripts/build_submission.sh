@@ -15,7 +15,7 @@ zip -r "$OUT" \
   graph_generator.py visualization.py requirements.txt README.md \
   scenarios tests report results \
   -x "*/__pycache__/*" "*.pyc" "*.pyo" "*.DS_Store" \
-     "*/.venv/*" "*/venv/*" "*/.pytest_cache/*" \\
+     "*/.venv/*" "*/venv/*" "*/.pytest_cache/*" \
      "report/RescueMesh_Report.docx"
 
 echo "Created: $OUT"
