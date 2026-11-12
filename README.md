@@ -1,146 +1,253 @@
 # RescueMesh
+**Quantum-Assisted Channel Allocation for Emergency Wireless Mesh Networks**
 
-**Quantum-assisted channel allocation for emergency wireless mesh networks** (Qiskit Fall Fest 2026 hackathon project)
+A Qiskit Fall Fest 2026 hackathon project exploring QUBO, Ising Hamiltonians, and QAOA for allocating wireless channels in post-disaster emergency mesh networks.
 
-RescueMesh assigns wireless channels to five emergency-communication nodes so that nodes that interfere with each other avoid sharing a channel. The problem is written as a QUBO, converted to an Ising Hamiltonian and solved with QAOA on Qiskit's local simulator. An independent exhaustive-search solver provides the exact answer to compare against.
+## Overview
 
-> **Honest summary.** This is a small simulation study on a noiseless simulator. QAOA finds valid and optimal allocations far more often than random sampling, but it uses far more compute than the exact classical solver, which finds all optima in about a millisecond. **No quantum advantage or speedup is claimed.**
+After a disaster, cellular infrastructure may become unavailable. Emergency teams can deploy portable wireless mesh nodes for command, medical, rescue, and shelter operations.
 
-![Architecture](report/architecture_diagram.png)
+When nearby nodes share wireless channels, interference can occur. RescueMesh models this problem as a mathematical optimization task and compares quantum-inspired optimization with classical algorithms.
 
-## Real-world use case
+The project uses:
+- QUBO for mathematical formulation.
+- Ising Hamiltonians for quantum encoding.
+- QAOA for approximate optimization.
+- Qiskit Aer for local quantum circuit simulation.
+- Exhaustive Search, Greedy Allocation, and Simulated Annealing for classical comparisons.
 
-After an earthquake or flood, cellular networks may be down. Rescue teams deploy portable mesh nodes (command center, medical unit, rescue teams, shelter). Nearby nodes on the same channel interfere, and spectrum is limited. Choosing channels by hand is error-prone; RescueMesh shows how this can be posed as an optimization problem. It is a simulation, not a real wireless deployment.
+**Scientific integrity:** This is a simulation using synthetic interference weights, not a real wireless deployment. No quantum advantage or speedup is claimed.
 
-## Problem statement
+## Mathematical Formulation
 
-* 5 nodes `A–E`, 3 channels `0, 1, 2`.
-* 7 weighted interference edges (synthetic weights): A–B 5, A–C 2, B–C 4, B–D 3, C–D 6, C–E 2, D–E 5.
-* Give every node exactly one channel and minimize the total weight of edges whose two ends share a channel.
+Let:
+- \(x_{i,c}\in\{0,1\}\): whether node \(i\) uses channel \(c\).
+- \(w_{ij}\): interference weight between connected nodes.
+- \(P\): penalty for violating channel-assignment constraints.
 
-## Mathematical formulation
+The QUBO objective is:
 
-Binary variable `x(i,c) = 1` if node `i` uses channel `c` (5 × 3 = 15 variables).
+\[
+\boxed{
+E(x)=
+\sum_{(i,j)\in E}w_{ij}\sum_{c=1}^{K}x_{i,c}x_{j,c}
++
+P\sum_{i=1}^{N}
+\left(\sum_{c=1}^{K}x_{i,c}-1\right)^2
+}
+\]
 
-```
-Interference  = Σ over edges (i,j)  w_ij · Σ_c  x(i,c) · x(j,c)
-Penalty       = P · Σ over nodes i  ( Σ_c x(i,c) − 1 )²
-Minimize        E(x) = Interference + Penalty          with P = 15
-```
+The first term minimizes interference. The second ensures that every node receives exactly one channel.
 
-* The interference term is 1 only when both ends of an edge pick the same channel, so it charges the edge weight exactly in that case.
-* The penalty is 0 when a node has exactly one channel and ≥ P otherwise (no channel or several channels).
-* Using `x² = x`, each node's penalty expands to `P·(1 − Σ_c x(i,c) + 2·Σ_{c<c'} x(i,c)·x(i,c'))`.
-* **Why P = 15:** the largest weighted degree is 14 (node C: 2+4+6+2). A penalty above that guarantees that dropping a node's channel can never pay off, whatever the weights. (P = 13 also happens to work on this instance, but P = 15 does not rely on luck.)
+The binary variables are converted into Ising variables using:
 
-## QUBO and Ising
+\[
+x_i=\frac{1-Z_i}{2}
+\]
 
-* **QUBO** (Quadratic Unconstrained Binary Optimization): minimize `xᵀQx + offset` over 0/1 variables with no hard constraints. Here Q has 51 non-zero entries and offset 75.
-* **Ising:** substituting `x = (1 − z)/2` with `z = ±1` gives `E = const + Σ hᵢ zᵢ + Σ Jᵢⱼ zᵢ zⱼ` with `Jᵢⱼ = Qᵢⱼ/4`, `hᵢ = −Qᵢᵢ/2 − ¼·(sum of Q entries touching i)`. That is 15 `Z` terms and 36 `ZZ` terms (constant 95.25).
-* All 2¹⁵ = 32,768 bit patterns are checked: valid patterns have energy equal to the true interference, invalid ones are penalized, the lowest invalid energy (15) is above the valid optimum (0), and Ising energy equals QUBO energy everywhere.
+This produces a cost Hamiltonian used by QAOA.
 
-## QAOA implementation (`quantum_solver.py`)
+## QAOA Implementation
 
-1. Hadamard on all 15 qubits (equal superposition of all bit patterns).
-2. **Cost layer** `exp(−iγH)`: `RZ(2γh)` per qubit and `RZZ(2γJ)` per coupling. It tags each pattern with a phase set by its energy.
-3. **Mixer layer** `exp(−iβΣX)`: `RX(2β)` on each qubit, so phases interfere and low-energy patterns gain probability.
-4. Measure all qubits (8,192 shots). A classical optimizer (grid search + COBYLA, scipy) tunes `γ, β` to minimize the **sampled mean energy**.
-5. Decode bitstrings (Qiskit prints qubit 0 as the **rightmost** character) into node-channel assignments; valid = every node has exactly one channel.
+RescueMesh implements the Quantum Approximate Optimization Algorithm using Qiskit Aer.
 
-Executed with `qiskit` + `qiskit-aer` (`AerSimulator`, state-vector method, fixed seed 42). Experiments use p = 1 and, optionally, p = 2.
+The circuit alternates between:
 
-*Implementation note:* an earlier version bound circuit parameters from a plain list, which Qiskit orders alphabetically (`beta` before `gamma`), silently swapping γ and β. Parameters are now bound by name and a test checks it. All reported results come from the corrected code.
+1. Initial equal superposition using Hadamard gates.
+2. Cost Hamiltonian rotations using RZ and RZZ gates.
+3. Mixer Hamiltonian rotations using RX gates.
+4. Measurement and classical decoding.
+5. Classical parameter optimization using COBYLA.
 
-## Classical baseline (`classical_solver.py`)
+Experiments use QAOA depths \(p=1\) and \(p=2\).
 
-Independent of Qiskit: enumerates all 3⁵ = 243 assignments, scores each, and returns the exact optimum (interference **0**) with all **6** optimal assignments (channel relabellings of one pattern). Six validation checks run on it.
+The quantum circuits are simulated locally using a classical computer. No quantum hardware is required.
 
-## Results
+## Experimental Results
 
-Same budget for all sampled methods: **8,192 samples**, seed 42 (full output in `results/phase5_results.json`).
+### Unavoidable-Interference Scenario
 
-| Method | Valid samples | Optimal samples | Distinct optima found | Best valid score | Mean energy (all samples) |
-|---|---|---|---|---|---|
-| Random sampling | 62 (0.76%) | 2 (0.02%) | 2 of 6 | 0 | 95.61 |
-| QAOA p = 1 | 1,461 (17.83%) | 43 (0.52%) | 6 of 6 | 0 | 31.93 |
-| QAOA p = 2 | 2,288 (27.93%) | 82 (1.00%) | 6 of 6 | 0 | 28.50 |
-| Exhaustive search (243 enumerated, all valid) | 243 (100%) | 6 (2.47% of assignments) | 6 of 6 | 0 | n/a* |
+The five-node scenario contains a four-node clique (K4) with only three available channels. Therefore, at least one interference conflict is unavoidable.
 
-\*The exhaustive mean interference over the 243 valid assignments is 9.00. It is **not comparable** to the sampled mean energies, which include the penalty of invalid samples.
+- Nodes: 5
+- Channels: 3
+- Edges: 8
+- Qubits: 15
+- Shots: 4,096
+- Exact global optimum: 2.4
+- Number of optimal assignments: 6
 
-* Exact global optimum: 0; gap of every method's best valid result: 0. **The random baseline also found optimal allocations (2 samples).** Reaching the optimum therefore proves little; the difference is how often. Uniform sampling would be expected to give about 61 valid and 1.5 optimal samples out of 8,192.
-* 82.17% (p = 1) and 72.07% (p = 2) of QAOA samples are still invalid.
-* p = 2 used a different optimization effort (8 COBYLA starts, 758 circuit evaluations vs 2,642 for the p = 1 grid + COBYLA). It is a single run, so its improvement is **suggestive, not conclusive**.
-* Runtime in the clean-environment run (CPU simulation, varies by machine): exhaustive 1.6 ms; random sampling 0.07 s; QAOA p = 1 91 s optimization + 0.09 s sampling; p = 2 34 s optimization + 0.08 s sampling.
+### QAOA Results
 
-Figures are written to `results/` (`network_graph.png`, `fig1`–`fig5`).
+| Metric | QAOA p=1 | QAOA p=2 |
+|---|---:|---:|
+| Valid solutions | 18.14% | 48.46% |
+| Optimal solutions | 0.37% | 1.64% |
+| Mean QUBO energy | 51.84 | 40.42 |
+| Optimization time | 53.4 s | 17.3 s |
+| Best valid interference | 2.4 | 2.4 |
+
+Increasing the QAOA depth from p=1 to p=2 improved the valid-solution and optimal-solution sampling rates in this experiment.
+
+### Classical Comparison
+
+| Algorithm | Best Interference | Runtime |
+|---|---:|---:|
+| Exhaustive Search | 2.4 | 1.9 ms |
+| Greedy Allocation | 2.4 | 0.14 ms |
+| Simulated Annealing | 2.4 | 25.99 ms |
+| QAOA p=1 | 2.4 | 53.4 s optimization |
+| QAOA p=2 | 2.4 | 17.3 s optimization |
+
+These results demonstrate that QAOA can find optimal candidate solutions in this small simulated instance. Classical algorithms remain substantially faster.
+
+Results are from individual experimental runs and should not be interpreted as statistical proof of consistent QAOA improvement.
 
 ## Installation
 
-Tested with Python 3.12.3 on Linux. From the project folder:
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/M-Faiq-7R/RescueMesh.git
+```
+
+### 2. Enter the project directory
+
+```bash
+cd RescueMesh
+```
+
+### 3. Create a virtual environment
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+```
+
+### 4. Activate it
+
+Linux / macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+Windows:
+
+```powershell
+.venv\Scripts\activate
+```
+
+### 5. Install dependencies
+
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Pinned dependencies: `qiskit==2.6.2`, `qiskit-aer==0.18.2`, `numpy==2.5.4`, `scipy==1.18.1`, `networkx==3.7`, `matplotlib==3.11.2`.
+### 6. Verify installation
 
-## Execution
+```bash
+python -c "import qiskit, qiskit_aer, networkx; print('Qiskit:', qiskit.__version__); print('Aer:', qiskit_aer.__version__); print('NetworkX:', networkx.__version__)"
+```
+
+Tested locally with:
+- Python 3.12
+- Qiskit 2.6.2
+- Qiskit Aer 0.18.2
+- NetworkX 3.7
+
+## Running RescueMesh
+
+### Run the default experiment
 
 ```bash
 python main.py
 ```
 
-This runs every phase (about 2 minutes; QAOA parameter optimization dominates), prints all checks and tables, and writes `results/*.png`, `results/*.json`, `results/comparison_table.csv` and `report/architecture_diagram.png`. Results are reproducible (fixed seeds); only the runtimes vary.
+### Run the unavoidable-interference scenario
 
-Example output (excerpt from a real run):
-
-```
-Minimum interference (global optimum): 0
-Number of optimal assignments (channel relabellings): 6
-...
-  Method            | Samples        | Valid (count, %) | Optimal (count, %) | Distinct optima | ...
-  Random sampling   | 8192           | 62 (0.76%)       | 2 (0.02%)          | 2 of 6          | ...
-  QAOA p=1          | 8192           | 1461 (17.83%)    | 43 (0.52%)         | 6 of 6          | ...
-  QAOA p=2          | 8192           | 2288 (27.93%)    | 82 (1.00%)         | 6 of 6          | ...
-Independent verification from raw counts:
-  [PASS] QAOA p=1: counts, percentages and mean energy recomputed from raw bitstrings
+```bash
+python main.py --scenario scenarios/unavoidable_5node.json --p 1 --shots 4096
 ```
 
-Optional: `report/build_report.js` regenerates the Word report from `results/phase5_results.json` (needs Node.js and the `docx` npm package; not required to reproduce the experiments).
+### Run QAOA with p=2
 
-## Project structure
-
+```bash
+python main.py --scenario scenarios/unavoidable_5node.json --p 2 --shots 4096
 ```
+
+### Run the larger eight-node scenario
+
+```bash
+python main.py --scenario scenarios/realistic_8node.json --no-qaoa
+```
+
+### Run the interactive demonstration
+
+```bash
+python demo.py
+```
+
+Generated visualizations and experiment outputs are saved under `results/`.
+
+## Running Tests
+
+Execute the automated test suite:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The current local test suite contains 25 tests, covering:
+- Classical optimization algorithms.
+- QUBO matrix construction.
+- QUBO-to-Ising conversion.
+- Quantum solver helper functions.
+- Scenario validation.
+- Visualization.
+- Statevector memory calculations.
+
+**Latest local verification:** 25 tests passed.
+
+## Project Structure
+
+```text
 RescueMesh/
-├── main.py               runs all phases, prints checks/tables, saves results and figures
-├── config.py             the fixed instance: nodes, channels, edges, penalty P = 15
-├── graph_generator.py    builds the weighted interference graph (NetworkX)
-├── qubo_model.py         QUBO matrix, bit-pattern helpers, QUBO -> Ising conversion
-├── quantum_solver.py     QAOA circuit, Aer simulation, optimizer, decoding (Qiskit)
-├── classical_solver.py   exhaustive search + validation (no Qiskit)
-├── evaluation.py         QUBO validation, sample statistics, verification from raw counts
-├── visualization.py      network plot, comparison figures, architecture diagram
-├── requirements.txt      pinned dependencies
-├── results/              figures, phase5_results.json, qaoa_results.json, comparison_table.csv
-└── report/               architecture diagram, report, video script, build_report.js
+├── main.py
+├── demo.py
+├── simulation.py
+├── scenario.py
+├── scenario_generator.py
+├── qubo_model.py
+├── quantum_solver.py
+├── classical_solver.py
+├── evaluation.py
+├── visualization.py
+├── config.py
+├── requirements.txt
+├── scenarios/
+├── tests/
+├── results/
+└── report/
 ```
 
 ## Limitations
 
-* Tiny instance (5 nodes, 15 qubits) with a **zero-interference optimum** (the graph is 3-colourable), which makes it relatively easy.
-* **Noiseless simulator only**; no quantum hardware or noise model was tested.
-* No quantum speedup or advantage is demonstrated; exhaustive search is exact and much cheaper here.
-* High share of invalid measurements (72–82%), and QAOA quality depends on **classical parameter optimization**; the γ search covers only [0, π/2] and its grid was informed by an exact diagnostic scan.
-* p = 2 is one run with different optimizer effort; no statistical study over seeds was done.
-* Interference weights are synthetic, not measured radio data.
+- Synthetic interference weights rather than measured RF data.
+- Small problem instances.
+- QAOA executed on a classical statevector simulator.
+- Noisy quantum hardware was not tested.
+- Classical solvers outperform QAOA in runtime on tested instances.
+- Results are individual runs, not a large-scale statistical evaluation.
+- No quantum advantage or speedup is demonstrated.
 
 ## References
 
-1. E. Farhi, J. Goldstone, S. Gutmann, "A Quantum Approximate Optimization Algorithm", arXiv:1411.4028 (2014).
-2. A. Lucas, "Ising formulations of many NP problems", Frontiers in Physics 2, 5 (2014), doi:10.3389/fphy.2014.00005.
-3. A. Javadi-Abhari et al., "Quantum computing with Qiskit", arXiv:2405.08810 (2024).
-4. Qiskit Aer simulator: https://github.com/Qiskit/qiskit-aer
-5. Software: SciPy (https://scipy.org), NetworkX (https://networkx.org), Matplotlib (https://matplotlib.org).
+1. Farhi, E., Goldstone, J., and Gutmann, S. *A Quantum Approximate Optimization Algorithm* (2014). https://arxiv.org/abs/1411.4028
+2. Lucas, A. *Ising Formulations of Many NP Problems* (2014). https://doi.org/10.3389/fphy.2014.00005
+3. Javadi-Abhari et al. *Quantum Computing with Qiskit* (2024). https://arxiv.org/abs/2405.08810
+4. Qiskit Aer: https://github.com/Qiskit/qiskit-aer
+
+---
+
+**Developed for Qiskit Fall Fest 2026.**
