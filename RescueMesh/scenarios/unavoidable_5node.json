@@ -1,0 +1,39 @@
+{
+  "name": "Unavoidable Interference (5-Node K4)",
+  "description": "5-node emergency mesh containing a 4-clique (A-B-C-D) with only 3 available channels. Interference is mathematically unavoidable (global optimum > 0).",
+  "is_synthetic": true,
+  "rf_measurement": false,
+  "disclaimer": "Synthetic heuristic weights for simulation; not empirical RF/SINR measurements.",
+  "nodes": ["A", "B", "C", "D", "E"],
+  "channels": [0, 1, 2],
+  "edges": [
+    ["A", "B", 4.0],
+    ["A", "C", 3.0],
+    ["A", "D", 5.0],
+    ["B", "C", 6.0],
+    ["B", "D", 2.0],
+    ["C", "D", 4.0],
+    ["C", "E", 3.0],
+    ["D", "E", 2.0]
+  ],
+  "node_roles": {
+    "A": "Incident Command Post",
+    "B": "Medical Triage Center",
+    "C": "Rescue Team Alpha",
+    "D": "Rescue Team Bravo",
+    "E": "Evacuation Shelter"
+  },
+  "node_priorities": {
+    "A": 1.5,
+    "B": 1.2,
+    "C": 1.0,
+    "D": 1.0,
+    "E": 1.0
+  },
+  "priority_mode": "product",
+  "penalty": 25.0,
+  "metadata": {
+    "clique": ["A", "B", "C", "D"],
+    "chromatic_number": 4
+  }
+}

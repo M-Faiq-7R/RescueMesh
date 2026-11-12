@@ -1,0 +1,221 @@
+{
+  "name": "Synthetic 12-Node Mesh (4 Channels)",
+  "description": "Synthetic 12-node emergency mesh with 4 channels. Unavoidable interference injected via (K_5) clique. All link weights are synthetic simulation heuristics (not empirical RF measurements).",
+  "is_synthetic": true,
+  "rf_measurement": false,
+  "disclaimer": "Synthetic heuristic weights for simulation; not empirical RF/SINR measurements.",
+  "nodes": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L"
+  ],
+  "channels": [
+    0,
+    1,
+    2,
+    3
+  ],
+  "edges": [
+    [
+      "A",
+      "B",
+      3.0
+    ],
+    [
+      "A",
+      "C",
+      7.0
+    ],
+    [
+      "A",
+      "D",
+      6.0
+    ],
+    [
+      "A",
+      "E",
+      5.0
+    ],
+    [
+      "A",
+      "F",
+      3.0
+    ],
+    [
+      "A",
+      "H",
+      2.0
+    ],
+    [
+      "A",
+      "J",
+      3.0
+    ],
+    [
+      "A",
+      "L",
+      4.0
+    ],
+    [
+      "B",
+      "C",
+      4.0
+    ],
+    [
+      "B",
+      "D",
+      5.0
+    ],
+    [
+      "B",
+      "E",
+      2.0
+    ],
+    [
+      "B",
+      "F",
+      2.0
+    ],
+    [
+      "B",
+      "G",
+      6.0
+    ],
+    [
+      "B",
+      "J",
+      6.0
+    ],
+    [
+      "B",
+      "L",
+      7.0
+    ],
+    [
+      "C",
+      "D",
+      4.0
+    ],
+    [
+      "C",
+      "E",
+      5.0
+    ],
+    [
+      "C",
+      "H",
+      2.0
+    ],
+    [
+      "C",
+      "J",
+      3.0
+    ],
+    [
+      "D",
+      "E",
+      4.0
+    ],
+    [
+      "D",
+      "J",
+      7.0
+    ],
+    [
+      "E",
+      "F",
+      8.0
+    ],
+    [
+      "E",
+      "J",
+      4.0
+    ],
+    [
+      "E",
+      "K",
+      2.0
+    ],
+    [
+      "F",
+      "I",
+      4.0
+    ],
+    [
+      "F",
+      "J",
+      3.0
+    ],
+    [
+      "G",
+      "J",
+      4.0
+    ],
+    [
+      "H",
+      "J",
+      5.0
+    ],
+    [
+      "I",
+      "J",
+      3.0
+    ],
+    [
+      "J",
+      "K",
+      5.0
+    ],
+    [
+      "J",
+      "L",
+      2.0
+    ]
+  ],
+  "node_roles": {
+    "A": "Incident Command Post",
+    "B": "Medical Triage Unit",
+    "C": "Search & Rescue Alpha",
+    "D": "Search & Rescue Bravo",
+    "E": "Field Hospital",
+    "F": "Evacuation Shelter North",
+    "G": "Evacuation Shelter South",
+    "H": "Logistics Supply Depot",
+    "I": "Drone Surveillance Relay",
+    "J": "Perimeter Security Post",
+    "K": "Water Distribution Point",
+    "L": "Helipad Communications"
+  },
+  "node_priorities": {
+    "A": 3.0,
+    "B": 2.5,
+    "C": 2.0,
+    "D": 2.0,
+    "E": 2.2,
+    "F": 1.5,
+    "G": 1.5,
+    "H": 1.0,
+    "I": 1.3,
+    "J": 1.1,
+    "K": 1.2,
+    "L": 2.0
+  },
+  "priority_mode": "product",
+  "penalty": 188.0,
+  "metadata": {
+    "generator": "scenario_generator.py",
+    "seed": 101,
+    "edge_density": 0.35,
+    "force_unavoidable": true,
+    "clique_size": 5
+  }
+}

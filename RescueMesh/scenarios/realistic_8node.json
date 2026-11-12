@@ -1,0 +1,53 @@
+{
+  "name": "Realistic Disaster Response (8-Node Mesh)",
+  "description": "Realistic post-disaster mesh deployment with 8 tactical nodes, 3 channels, node operational priorities, and unavoidable high-density core interference (chromatic number >= 4).",
+  "is_synthetic": true,
+  "rf_measurement": false,
+  "disclaimer": "Synthetic heuristic weights for simulation; not empirical RF/SINR measurements.",
+  "nodes": ["A", "B", "C", "D", "E", "F", "G", "H"],
+  "channels": [0, 1, 2],
+  "edges": [
+    ["A", "B", 6.0],
+    ["A", "C", 4.0],
+    ["A", "D", 5.0],
+    ["A", "H", 3.0],
+    ["B", "C", 5.0],
+    ["B", "D", 4.0],
+    ["B", "E", 3.0],
+    ["C", "D", 6.0],
+    ["C", "G", 2.0],
+    ["D", "F", 3.0],
+    ["E", "F", 4.0],
+    ["E", "G", 3.0],
+    ["E", "H", 2.0],
+    ["F", "G", 4.0],
+    ["G", "H", 3.0]
+  ],
+  "node_roles": {
+    "A": "Incident Command Post",
+    "B": "Medical Field Hospital",
+    "C": "Search & Rescue Alpha",
+    "D": "Search & Rescue Bravo",
+    "E": "Evacuation Center North",
+    "F": "Evacuation Center South",
+    "G": "Logistics & Supply Depot",
+    "H": "Drone Surveillance Relay"
+  },
+  "node_priorities": {
+    "A": 2.5,
+    "B": 2.2,
+    "C": 1.8,
+    "D": 1.8,
+    "E": 1.4,
+    "F": 1.4,
+    "G": 1.0,
+    "H": 1.2
+  },
+  "priority_mode": "product",
+  "penalty": 50.0,
+  "metadata": {
+    "deployment_zone": "Post-earthquake urban sector",
+    "topology": "Dense core (A-B-C-D) with perimeter relays (E-F-G-H)",
+    "unavoidable_interference": true
+  }
+}

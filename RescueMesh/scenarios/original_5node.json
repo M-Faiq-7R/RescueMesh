@@ -1,0 +1,37 @@
+{
+  "name": "Original RescueMesh (5-Node Baseline)",
+  "description": "Original 5-node 3-channel benchmark scenario with 3-colorable zero-interference optimum.",
+  "is_synthetic": true,
+  "rf_measurement": false,
+  "disclaimer": "Synthetic heuristic weights for simulation; not empirical RF/SINR measurements.",
+  "nodes": ["A", "B", "C", "D", "E"],
+  "channels": [0, 1, 2],
+  "edges": [
+    ["A", "B", 5.0],
+    ["A", "C", 2.0],
+    ["B", "C", 4.0],
+    ["B", "D", 3.0],
+    ["C", "D", 6.0],
+    ["C", "E", 2.0],
+    ["D", "E", 5.0]
+  ],
+  "node_roles": {
+    "A": "Command center",
+    "B": "Rescue team 1",
+    "C": "Medical unit",
+    "D": "Rescue team 2",
+    "E": "Emergency shelter"
+  },
+  "node_priorities": {
+    "A": 1.0,
+    "B": 1.0,
+    "C": 1.0,
+    "D": 1.0,
+    "E": 1.0
+  },
+  "priority_mode": "product",
+  "penalty": 15.0,
+  "metadata": {
+    "benchmark": "qiskit_fall_fest_2026"
+  }
+}
