@@ -1,258 +1,237 @@
-# RescueMesh: Configurable Quantum-Assisted Channel Allocation Simulation
+# RescueMesh — Technical Documentation
 
-[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
-[![Qiskit 2.6](https://img.shields.io/badge/qiskit-2.6.2-purple.svg)](https://qiskit.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+**Quantum-assisted channel allocation for emergency wireless mesh networks**
 
-**RescueMesh** simulates wireless channel allocation for post-disaster emergency mesh communications using Quadratic Unconstrained Binary Optimization (QUBO), Ising Hamiltonians, and the Quantum Approximate Optimization Algorithm (QAOA) via Qiskit Aer, evaluated alongside classical heuristics (Greedy allocation, Simulated Annealing, and Exhaustive Search).
+RescueMesh is a configurable simulation framework for studying channel allocation in post-disaster emergency wireless mesh networks. It formulates weighted same-channel interference as a QUBO, maps the model to an Ising Hamiltonian, and evaluates QAOA using Qiskit Aer alongside classical baselines.
 
-> [!IMPORTANT]
-> **Scientific Integrity & Limitations Summary**
-> * **No Quantum Advantage or Speedup**: Classical exact search and classical heuristics (Greedy, Simulated Annealing) vastly outperform simulated QAOA in both solution quality and execution time (milliseconds vs minutes). No quantum advantage or speedup is claimed or demonstrated.
-> * **Simulation, Not Real RF Hardware**: All interference link weights and node roles are synthetic modeling heuristics for optimization simulations. They do not represent empirical radio frequency (RF) measurements, signal-to-interference-plus-noise ratio (SINR), RSSI, or hardware physical layer tests.
-> * **State-Vector Memory Scaling ($O(2^n)$)**: Idealized state-vector quantum simulators store $2^n$ complex128 amplitudes ($16 \times 2^n$ bytes). For $n \le 18$ qubits, simulation requires $\le 4.2\text{ MB}$; at $n = 24$ qubits (e.g. 8 nodes $\times$ 3 channels), each statevector requires $268\text{ MB}$ and parameter optimization becomes slow. Instances exceeding 18 qubits are safely handled by classical solvers.
+> **Scientific scope:** This repository does not deploy radios or measure real RF interference. Scenario edge weights and node priorities are synthetic modeling inputs. QAOA is simulated on a classical computer. No quantum advantage or speedup is claimed.
 
----
+## Contents
 
-## Architecture
+- [Problem and workflow](#problem-and-workflow)
+- [Mathematical model](#mathematical-model)
+- [Algorithms](#algorithms)
+- [Scenarios](#scenarios)
+- [Recorded QAOA experiment](#recorded-qaoa-experiment)
+- [Installation](#installation)
+- [Run commands](#run-commands)
+- [Tests](#tests)
+- [Outputs](#outputs)
+- [Project map](#project-map)
+- [Limitations](#limitations)
+- [References](#references)
 
-RescueMesh implements a modular, hybrid classical-quantum evaluation pipeline:
+## Problem and workflow
 
-```
-+---------------------------------------------------------------------------------------+
-| 1. Configurable Network Input (JSON Scenario / Synthetic Generator)                   |
-|    - Nodes, channels, synthetic interference edges, node operational priorities       |
-|    - Schema validation, duplicate undirected edge rejection, self-loop rejection      |
-+---------------------------------------------------------------------------------------+
-                                           |
-                                           v
-+---------------------------------------------------------------------------------------+
-| 2. Weighted Interference Graph & Formulation                                          |
-|    - Effective weights: w_eff = w * priority_factor(p_u, p_v)                         |
-|    - Binary variables: x(i, c) = 1 if node i is assigned channel c                    |
-|    - QUBO: E(x) = Interference + P * (Sum_c x(i,c) - 1)^2 with safe penalty P         |
-|    - Ising Hamiltonian: x = (1 - z)/2 -> H_C = const + Sum h_i Z_i + Sum J_ij Z_i Z_j |
-+---------------------------------------------------------------------------------------+
-                   |                                           |
-                   v                                           v
-+------------------------------------+     +--------------------------------------------+
-| 3. Classical Optimization          |     | 4. Quantum Optimization (QAOA)             |
-|    - Exhaustive Search (exact)     |     |    - Memory safety check (<18 qubits)      |
-|    - Priority-Degree Greedy        |     |    - Equal superposition state |+>^n       |
-|    - Simulated Annealing           |     |    - Cost layer RZ/RZZ(gamma)                  |
-|    - Optimality gap reporting      |     |    - Mixer layer RX(beta)                      |
-|                                    |     |    - COBYLA parameter optimization         |
-|                                    |     |    - Shot measurement & bitstring decode   |
-+------------------------------------+     +--------------------------------------------+
-                   \                                           /
-                    \                                         /
-                     v                                       v
-+---------------------------------------------------------------------------------------+
-| 5. Evaluation, Verification & Visualization                                           |
-|    - Direct mathematical verification from raw counts & formula                       |
-|    - Channel-colored topology plot with bold crimson clash highlighting               |
-|    - Performance comparison table & JSON artifact export                              |
-+---------------------------------------------------------------------------------------+
-```
+After a disaster, cellular infrastructure may be unavailable. Emergency response teams can deploy portable mesh nodes for command, medical, rescue, shelter, and logistics functions. Nodes that interfere with one another should avoid using the same channel where possible.
 
----
+The pipeline is:
 
-## Scenario Input Format (JSON)
+1. Load and validate a JSON scenario.
+2. Build an undirected weighted interference graph.
+3. Compute priority-adjusted edge weights.
+4. Solve with exhaustive search (when tractable), greedy allocation, and simulated annealing.
+5. Construct and validate the QUBO and equivalent Ising model.
+6. Run QAOA on Qiskit Aer when the qubit safety guard permits.
+7. Decode measured bitstrings, verify assignments, and export tables, JSON, and plots.
 
-RescueMesh accepts structured JSON scenario files with full schema validation.
+## Mathematical model
 
-### JSON Schema Specification
-```json
-{
-  "name": "Scenario Title (string)",
-  "description": "Operational context (string)",
-  "is_synthetic": true,
-  "rf_measurement": false,
-  "nodes": ["A", "B", "C", "D"],
-  "channels": [0, 1, 2],
-  "edges": [
-    ["A", "B", 4.0],
-    ["A", "C", 3.0],
-    ["B", "C", 5.0]
-  ],
-  "node_roles": {
-    "A": "Command Post",
-    "B": "Triage Center",
-    "C": "Rescue Team",
-    "D": "Shelter"
-  },
-  "node_priorities": {
-    "A": 2.5,
-    "B": 2.0,
-    "C": 1.5,
-    "D": 1.0
-  },
-  "priority_mode": "product",
-  "penalty": 25.0
-}
-```
+Let (x_{i,c}\in\{0,1\}) indicate whether node (i) is assigned channel (c). Each node must receive exactly one channel.
 
-### Validation Guarantees
-The loader (`scenario.py`) validates:
-1. **No duplicate or malformed nodes / channels**.
-2. **Endpoint validity**: All edge endpoints must belong to `nodes`.
-3. **No self-loops**: Edges like `("A", "A", 2.0)` are rejected.
-4. **Undirected edge uniqueness**: If `("A", "B")` exists, any duplicate `("A", "B")` or reversed `("B", "A")` is strictly rejected.
-5. **Positive weights & priorities**: All link penalties and node priorities must be positive finite numbers.
-6. **Automatic safe penalty computation**: If `penalty` is omitted, $P$ is automatically computed such that $P > \max_u \sum_v w_{uv}^{\text{eff}}$, guaranteeing that no constraint violation can ever beat a valid assignment.
+The effective edge weight is:
 
-### Provided Scenarios
-* [`scenarios/original_5node.json`](file:///home/rajpoot/Desktop/Projects/RescueMesh/RescueMesh/scenarios/original_5node.json): The original benchmark (5 nodes, 3 channels, 3-colorable with global optimum 0.0).
-* [`scenarios/unavoidable_5node.json`](file:///home/rajpoot/Desktop/Projects/RescueMesh/RescueMesh/scenarios/unavoidable_5node.json): 5-node scenario containing a 4-clique ($K_4$) with 3 channels. By the Pigeonhole Principle, chromatic number is 4, forcing **unavoidable interference** (exact global optimum = 2.4).
-* [`scenarios/realistic_8node.json`](file:///home/rajpoot/Desktop/Projects/RescueMesh/RescueMesh/scenarios/realistic_8node.json): 8-node tactical post-disaster mesh with command posts, field hospitals, triage teams, and shelters. Contains an unavoidable high-density core ($3^8 = 6,561$ exhaustive states, exact global optimum = 15.84).
-* [`scenarios/dense_12node.json`](file:///home/rajpoot/Desktop/Projects/RescueMesh/RescueMesh/scenarios/dense_12node.json): 12-node 4-channel dense mesh ($4^{12} \approx 16.7$ million states) where classical heuristics (Greedy and Simulated Annealing) solve the instance in milliseconds.
+[
+w_{uv}^{\mathrm{eff}} = w_{uv}(p_u p_v)
+]
 
----
+where (w_{uv}) is the scenario's synthetic edge weight and (p_u,p_v) are node priorities.
 
-## Mathematical Formulation
+The QUBO objective is:
 
-For $N$ nodes and $C$ channels, binary decision variables are:
-$$x(i, c) = \begin{cases} 1 & \text{if node } i \text{ is assigned channel } c \\ 0 & \text{otherwise} \end{cases}$$
+[
+E(x)=
+\sum_{(u,v)\in\mathcal E}w_{uv}^{\mathrm{eff}}
+\sum_{c\in\mathcal C}x_{u,c}x_{v,c}
++
+P\sum_{i\in\mathcal V}
+\left(\sum_{c\in\mathcal C}x_{i,c}-1\right)^2
+]
 
-### Objective Function (QUBO)
-$$\min_{x \in \{0, 1\}^{N \times C}} E(x) = \sum_{(u, v) \in \mathcal{E}} w_{uv}^{\text{eff}} \sum_{c=0}^{C-1} x(u, c) x(v, c) + P \sum_{i \in \mathcal{V}} \left( \sum_{c=0}^{C-1} x(i, c) - 1 \right)^2$$
+The first term penalizes adjacent nodes assigned the same channel. The second penalizes assignments that do not select exactly one channel per node. The scenario model validates supplied data and computes a safe penalty when one is not provided.
 
-Where the priority-weighted effective weight $w_{uv}^{\text{eff}}$ is defined by:
-$$w_{uv}^{\text{eff}} = w_{uv} \times (p_u \cdot p_v)$$
+The binary-to-spin substitution is:
 
-Using the idempotent identity $x^2 = x$ for $x \in \{0, 1\}$, each node's constraint expands into:
-$$P \left( 1 - \sum_{c=0}^{C-1} x(i, c) + 2 \sum_{0 \le c < c' < C} x(i, c) x(i, c') \right)$$
+[
+x_i=\frac{1-Z_i}{2}
+]
 
-### Ising Transformation
-Substituting $x_i = \frac{1 - z_i}{2}$ with Pauli spin operators $z_i \in \{-1, +1\}$ yields the Ising Hamiltonian:
-$$H_C = \text{const} \cdot I + \sum_{i} h_i Z_i + \sum_{i < j} J_{ij} Z_i Z_j$$
-where:
-$$J_{ij} = \frac{Q_{ij}}{4}, \quad h_i = -\frac{Q_{ii}}{2} - \frac{1}{4} \sum_{j \ne i} Q_{ij}, \quad \text{const} = \text{offset} + \sum_i \frac{Q_{ii}}{2} + \sum_{i < j} \frac{Q_{ij}}{4}$$
+This produces an Ising cost Hamiltonian with constant, single-(Z), and pairwise-(ZZ) terms. The QAOA cost layer uses the corresponding (R_Z) and (R_{ZZ}) rotations; the mixer uses (R_X) rotations.
 
----
+## Algorithms
 
-## Solvers & Algorithms
+| Method | Purpose |
+|---|---|
+| Exhaustive search | Exact global optimum and all optimal assignments for manageable (C^N) search spaces. |
+| Greedy allocation | Fast valid assignment using priority/degree ordering. |
+| Simulated annealing | Classical metaheuristic that explores valid channel assignments. |
+| QAOA | Variational quantum algorithm simulated by Qiskit Aer; parameter optimization is classical. |
+| Random sampling | Unoptimized baseline for comparing feasibility and optimal-sample rates. |
 
-| Solver | Paradigm | Characteristics |
-|---|---|---|
-| **Exhaustive Search** | Exact Classical | Evaluates all $C^N$ assignments. Guaranteed global optimum and reports all degenerate minima. Guarded against state spaces $> 500,000$. |
-| **Greedy Allocation** | Heuristic Classical | Nodes are sorted by operational priority descending and weighted degree descending; each node greedily selects the channel minimizing incremental clash cost. Execution in $< 1\text{ ms}$. |
-| **Simulated Annealing** | Metaheuristic Classical | Maintains strictly valid $\{node: channel\}$ states throughout. Proposes random single-node channel flips with Metropolis acceptance criterion and geometric cooling $T \leftarrow T \times \alpha$. |
-| **QAOA ($p=1, 2$)** | Quantum Variational (Simulated) | Alternates cost phase rotations $e^{-i \gamma H_C}$ and mixer rotations $e^{-i \beta \sum X_i}$. Classical optimizer (grid search + COBYLA) tunes $(\gamma, \beta)$ against sampled mean energy. |
+The default QAOA safety threshold is 18 qubits. A statevector stores (2^n) complex amplitudes (16 bytes each): 15 qubits require 0.5 MiB, 18 require 4 MiB, and 24 require 256 MiB, before simulator and optimization overhead. Use `--no-qaoa` for larger instances unless you understand the memory/runtime implications.
 
----
+## Scenarios
 
-## Experimental Benchmark Results
+| File | Description |
+|---|---|
+| `scenarios/original_5node.json` | Original 5-node, 3-channel benchmark; interference can be eliminated. |
+| `scenarios/unavoidable_5node.json` | 5 nodes, 3 channels, and a (K_4) subgraph; unavoidable interference, exact optimum 2.40. |
+| `scenarios/realistic_8node.json` | 8-node, 3-channel emergency mesh; exact optimum 15.84 in the recorded exhaustive run. QAOA is skipped by the 18-qubit guard. |
+| `scenarios/dense_12node.json` | Dense 12-node, 4-channel case; exhaustive enumeration is large, so use classical heuristics. |
 
-### 1. Realistic 8-Node Disaster Response Scenario (`scenarios/realistic_8node.json`)
-* Nodes: 8, Channels: 3, Edges: 15, Penalty $P = 50.0$.
-* Total valid states: $3^8 = 6,561$.
-* **Unavoidable interference**: Non-zero global optimum ($E^* = 15.84$).
+All scenarios are synthetic. The labels describe modeled emergency roles, not actual field deployments.
 
-| Algorithm | Type | Best Valid Score | Optimality Gap | Runtime |
-|---|---|---|---|---|
-| **Exhaustive Search** | Exact Classical | **15.84** | 0.00 (optimal) | 73.0 ms |
-| **Simulated Annealing** | Metaheuristic Classical | **15.84** | 0.00 (optimal) | 35.5 ms |
-| **Greedy Allocation** | Heuristic Classical | 18.00 | +2.16 (13.64%) | 0.15 ms |
-| **QAOA (Simulated)** | Variational Quantum | *Skipped* | N/A | Exceeds 18-qubit safety threshold (24 qubits = 268 MB statevector) |
+## Recorded QAOA experiment
 
-### 2. Unavoidable 5-Node Scenario (`scenarios/unavoidable_5node.json`)
-* Nodes: 5, Channels: 3, Qubits: 15, Statevector RAM: 0.5 MB.
-* Exact global minimum: **2.40** (6 optimal configurations).
+The following results are from the recorded 4,096-shot runs on `unavoidable_5node.json`. The exact classical optimum is 2.40, with six optimal assignments.
 
-| Algorithm | Type | Best Valid Score | Optimality Gap | Valid Rate | Runtime |
-|---|---|---|---|---|---|
-| **Exhaustive Search** | Exact Classical | **2.40** | 0.00 (optimal) | 100.0% | 2.6 ms |
-| **Greedy Allocation** | Heuristic Classical | **2.40** | 0.00 (optimal) | 100.0% | 0.12 ms |
-| **Simulated Annealing** | Metaheuristic Classical | **2.40** | 0.00 (optimal) | 100.0% | 39.1 ms |
-| **QAOA $p=1$** | Simulated Quantum | **2.40** | 0.00 (optimal) | 17.92% | 63.2 s opt + 0.02 s |
-| **Random Sampling** | Unoptimized Baseline | 4.50 | +2.10 (87.5%) | 0.68% | 0.01 s |
+| Metric | QAOA p=1 | QAOA p=2 |
+|---|---:|---:|
+| Valid sampled allocations | 18.14% | 48.46% |
+| Optimal sampled allocations | 0.37% | 1.64% |
+| Mean sampled QUBO energy | 51.84 | 40.42 |
+| Optimizer evaluations | 2,643 | 746 |
+| Optimization time | 53.4 s | 17.3 s |
+| Best valid interference | 2.40 | 2.40 |
 
----
+The corresponding random baseline had a 0.73% valid rate and a 0.02% optimal rate. The p=2 run improved the observed valid and optimal sampling rates for this instance. This is a single experimental comparison, not a statistical claim.
 
-## Network Visualizations
+**Interpretation matters:** mean QUBO energy includes the one-hot constraint penalty, while best valid interference is measured only on valid channel assignments. The classical solvers found the same exact optimum in milliseconds in the recorded run. These experiments therefore demonstrate a working QAOA formulation and sampling pipeline—not a practical runtime advantage over classical optimization.
 
-RescueMesh automatically generates two distinct visualization views in `results/`:
-1. `results/network_graph.png`: Base topology layout with synthetic edge weights.
-2. `results/allocated_network.png`: **Channel-colored allocation view** where node circles are colored by assigned channel, resolved links are rendered in muted gray, and active same-channel interference clashes are highlighted with bold crimson lines and explicit clash penalty labels.
+## Installation
 
----
+Tested with Python 3.12 and the pinned dependencies in `requirements.txt`.
 
-## Installation & Execution
+From the repository root:
 
-### Setup
-Tested on Linux with Python 3.12.
 ```bash
+cd RescueMesh
 python3 -m venv .venv
 source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Reproducible Execution Commands
+On Windows PowerShell, activate with:
 
-#### 1. Reproduce Original Baseline Experiment
-Runs the exact 5-node 3-channel benchmark with QAOA $p=1$ and $p=2$, exhaustive search, validation checks, and figure generation:
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+## Run commands
+
+Run the default original benchmark:
+
 ```bash
 python main.py
 ```
 
-#### 2. Run the Realistic 8-Node Scenario
-Evaluates the 8-node scenario with unavoidable interference using classical solvers:
-```bash
-python main.py --scenario scenarios/realistic_8node.json --no-qaoa
-```
+Run the unavoidable-interference scenario with QAOA p=1:
 
-#### 3. Run the Unavoidable Interference Scenario with QAOA
-Executes QAOA and classical solvers on the 5-node $K_4$ instance:
 ```bash
 python main.py --scenario scenarios/unavoidable_5node.json --p 1 --shots 4096
 ```
 
-#### 4. Generate a Custom Synthetic Scenario
+Run p=1 and p=2 comparison:
+
 ```bash
-python scenario_generator.py --nodes 8 --channels 3 --density 0.45 --seed 42 --out scenarios/custom_8node.json
-python main.py --scenario scenarios/custom_8node.json --no-qaoa
+python main.py --scenario scenarios/unavoidable_5node.json --p 2 --shots 4096
 ```
 
-#### 5. Run Automated Test Suite
-Executes 23 automated unit and integration tests:
+Run the 8-node scenario without QAOA:
+
 ```bash
-python -m unittest discover -s tests -p "test_*.py" -v
+python main.py --scenario scenarios/realistic_8node.json --no-qaoa
 ```
 
----
+Generate a synthetic scenario (the CLI's generator mode):
 
-## Project Structure
-
+```bash
+python main.py --generate-scenario --nodes 8 --channels 3 --density 0.45 --seed 42
 ```
+
+Choose a different output directory:
+
+```bash
+python main.py --scenario scenarios/unavoidable_5node.json --no-qaoa --outdir results/custom_run
+```
+
+See `python main.py --help` for all options.
+
+## Tests
+
+Run the automated suite:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+The maintained test suite covers scenario validation, deterministic synthetic generation, classical solvers, optimality gaps, QUBO/Ising energy equivalence, quantum helper and memory checks, and visualization. The latest recorded local verification was **25 tests passed**. Re-run the suite after changes in your environment.
+
+## Outputs
+
+The simulation writes to the selected output directory (default: `results/`), including:
+
+- `network_graph.png` — weighted network topology.
+- `allocated_network.png` — channel-colored allocation with same-channel conflicts highlighted.
+- `experiment_results.json` — structured scenario, solver, and validation results.
+- `comparison_table.csv` — compact method comparison.
+- Additional QAOA and experiment JSON artifacts, depending on the run.
+
+The repository also includes saved benchmark plots and JSON outputs. These are recorded artifacts, not automatically regenerated by reading the README.
+
+## Project map
+
+```text
 RescueMesh/
-├── main.py                 CLI entry point supporting scenarios and baseline reproduction
-├── simulation.py           Unified simulation engine (classical & quantum execution)
-├── scenario.py             Scenario dataclass, JSON loader, and schema validation
-├── scenario_generator.py   Reproducible synthetic scenario generator (clique injection)
-├── classical_solver.py     Exhaustive search, Greedy allocation, and Simulated Annealing
-├── qubo_model.py           QUBO matrix construction, bit-vector math, and Ising mapping
-├── quantum_solver.py       QAOA circuit, Aer state-vector simulation, and memory safety
-├── evaluation.py           QUBO mathematical validation and raw-counts verification
-├── visualization.py        Topology plotting, channel coloring, and clash highlighting
-├── config.py               Original 5-node baseline problem definition (retained)
-├── requirements.txt        Pinned dependencies
-├── scenarios/              Pre-configured network scenario JSON files
-│   ├── original_5node.json
-│   ├── unavoidable_5node.json
-│   ├── realistic_8node.json
-│   └── dense_12node.json
-├── tests/                  Comprehensive automated test suite
-│   └── test_rescuemesh.py
-├── results/                Generated plots, JSON data, and comparison tables
-└── report/                 Architecture diagram, report, and demonstration guides
+├── main.py                  # CLI and argument parsing
+├── simulation.py            # End-to-end simulation orchestration
+├── scenario.py              # Scenario data model and validation
+├── scenario_generator.py    # Reproducible synthetic scenario generation
+├── graph_generator.py       # Interference graph construction
+├── classical_solver.py      # Exhaustive, greedy, simulated annealing
+├── qubo_model.py            # QUBO construction and Ising conversion
+├── quantum_solver.py        # QAOA circuit and Aer execution
+├── evaluation.py            # Mathematical checks and result analysis
+├── visualization.py         # Topology and allocation plots
+├── config.py                # Original baseline configuration
+├── requirements.txt         # Pinned Python dependencies
+├── scenarios/               # JSON scenario inputs
+├── tests/                   # Automated unit tests
+├── results/                 # Saved/generated result artifacts
+└── report/
+    ├── README.md            # Documentation index
+    ├── DEMO_GUIDE.md        # Reproducible demo steps
+    ├── video_script.md      # Presentation script and Q&A
+    ├── RescueMesh_Report.docx
+    └── architecture_diagram.png
 ```
 
----
+## Limitations
+
+- Interference weights and priorities are synthetic, not measured RF data.
+- No SINR, RSSI, propagation, fading, mobility, or physical-layer simulation is performed.
+- QAOA runs on a classical simulator, not quantum hardware.
+- Statevector simulation scales exponentially with qubit count.
+- Classical exact/heuristic solvers are substantially faster on the tested small cases.
+- Reported QAOA percentages and runtimes are run-specific; repeated seeds and statistical analysis would be needed for stronger conclusions.
 
 ## References
 
-1. E. Farhi, J. Goldstone, S. Gutmann, *"A Quantum Approximate Optimization Algorithm"*, arXiv:1411.4028 (2014).
-2. A. Lucas, *"Ising formulations of many NP problems"*, Frontiers in Physics 2, 5 (2014).
-3. A. Javadi-Abhari et al., *"Quantum computing with Qiskit"*, arXiv:2405.08810 (2024).
-4. Qiskit Aer Simulator: [https://github.com/Qiskit/qiskit-aer](https://github.com/Qiskit/qiskit-aer).
+1. E. Farhi, J. Goldstone, and S. Gutmann, “A Quantum Approximate Optimization Algorithm” (2014), [arXiv:1411.4028](https://arxiv.org/abs/1411.4028).
+2. A. Lucas, “Ising Formulations of Many NP Problems,” *Frontiers in Physics* 2, 5 (2014), [doi:10.3389/fphy.2014.00005](https://doi.org/10.3389/fphy.2014.00005).
+3. A. Javadi-Abhari et al., “Quantum computing with Qiskit” (2024), [arXiv:2405.08810](https://arxiv.org/abs/2405.08810).
+4. [Qiskit Aer](https://github.com/Qiskit/qiskit-aer).
+
+---
+Developed for **Qiskit Fall Fest 2026**.
