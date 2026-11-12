@@ -11,7 +11,7 @@ A Qiskit Fall Fest 2026 project exploring how limited wireless channels can be a
 - **[Project overview and technical documentation](RescueMesh/README.md)** — formulation, architecture, experiments, setup, and limitations.
 - **[Demonstration guide](RescueMesh/report/DEMO_GUIDE.md)** — commands and suggested live-demo sequence.
 - **[Presentation script and technical Q&A](RescueMesh/report/video_script.md)** — concise walkthrough and anticipated judge questions.
-- **[Technical report](RescueMesh/report/RescueMesh_Report.docx)**
+- **[Current technical report](RescueMesh/report/TECHNICAL_REPORT.md)** — aligned with the unavoidable-interference benchmark. The existing Word report is a legacy document for the original baseline; see the [report index](RescueMesh/report/README.md).
 - **[Architecture diagram](RescueMesh/report/architecture_diagram.png)**
 - **[Scenario definitions](RescueMesh/scenarios/)** — original, unavoidable-interference, realistic 8-node, and dense 12-node cases.
 - **[Experiment outputs](RescueMesh/results/)** — plots, CSV comparison, and JSON artifacts.
